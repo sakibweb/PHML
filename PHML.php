@@ -2,6 +2,7 @@
 /**
  * Render HTML elements using PHP with PHML
  * Author: Sakibur Rahman @sakibweb
+ * Library: https://github.com/sakibweb/PHML
  * This class provides methods to generate HTML elements dynamically
  */
 class PHML {
@@ -11,20 +12,25 @@ class PHML {
      * @param string $tag The tag name of the HTML element
      * @param array $attributes Optional. An associative array of attributes for the element
      * @param string $value Optional. The inner content of the element
+     * @param bool $end Optional. Whether to close the tag or not. Default is true.
      * @return string The generated HTML element
      */
-    public static function element($tag, $attributes = [], $value = '') {
+    public static function element($tag, $attributes = [], $value = '', $end = true) {
         $html = "<$tag";
         foreach ($attributes as $key => $val) {
-            // Exclude 'inner' from attributes
-            if ($key !== 'inner') {
+            // Exclude 'inner' and 'end' from attributes
+            if ($key !== 'inner' && $key !== 'end') {
                 $html .= " $key=\"$val\"";
             }
         }
 
         // Add value (inner content) if present
         if ($value !== '') {
-            $html .= ">$value</$tag>";
+            $html .= ">$value";
+            // Add closing tag if 'end' is true or not provided
+            if ($end) {
+                $html .= "</$tag>";
+            }
         } else {
             // Don't add closing tag for self-closing tags like <br>
             if (!in_array($tag, ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'])) {
@@ -48,6 +54,7 @@ class PHML {
             $tag = $name;
             $attributes = [];
             $children = '';
+            $end = true; // Default end value
 
             foreach ($arguments as $arg) {
                 // If it's an array, it's attributes or inner content
@@ -63,6 +70,9 @@ class PHML {
                             // If inner content is a string, set it as inner HTML
                             $children .= $innerContent;
                         }
+                    } elseif (isset($arg['end'])) {
+                        // Check if 'end' key is provided
+                        $end = (bool)$arg['end'];
                     } else {
                         // Otherwise, merge attributes
                         $attributes = array_merge($attributes, $arg);
@@ -77,7 +87,7 @@ class PHML {
             }
 
             // Render the element
-            return self::element($tag, $attributes, $children);
+            return self::element($tag, $attributes, $children, $end);
         }
     }
 
@@ -93,34 +103,39 @@ class PHML {
         }
 
         $html = '';
-        foreach ($elements as $tag => $content) {
-            $attributes = [];
-            $children = '';
-
-            // Separate attributes and inner content
-            if (is_array($content)) {
-                if (isset($content['inner'])) {
-                    $innerContent = $content['inner'];
-                    // If inner content is an array, recursively render it
-                    if (is_array($innerContent)) {
-                        foreach ($innerContent as $inner) {
-                            $children .= self::arml($inner);
-                        }
-                    } else {
-                        // If inner content is a string, set it as inner HTML
-                        $children .= $innerContent;
-                    }
-                    unset($content['inner']);
-                }
-                // Set remaining array elements as attributes
-                $attributes = $content;
-            } else {
-                // If content is not an array, treat it as inner HTML
-                $children = $content;
+        foreach ($elements as $element) {
+            if (!is_array($element)) {
+                continue;
             }
 
+            // Separate tag, attributes, inner content, and 'end' key
+            $tag = key($element);
+            $content = current($element);
+            $attributes = [];
+            $children = '';
+            $end = true; // Default end value
+
+            if (isset($content['inner'])) {
+                $innerContent = $content['inner'];
+                // If inner content is an array, recursively render it
+                if (is_array($innerContent)) {
+                    $children .= self::arml($innerContent);
+                } else {
+                    // If inner content is a string, set it as inner HTML
+                    $children .= $innerContent;
+                }
+                unset($content['inner']);
+            }
+            // Set 'end' key value
+            if (isset($content['end'])) {
+                $end = (bool)$content['end'];
+                unset($content['end']);
+            }
+            // Set remaining array elements as attributes
+            $attributes = $content;
+
             // Generate HTML for the element
-            $html .= self::element($tag, $attributes, $children);
+            $html .= self::element($tag, $attributes, $children, $end);
         }
         return $html;
     }
