@@ -5,7 +5,9 @@
  * Library: https://github.com/sakibweb/PHML
  * This class provides methods to generate HTML elements dynamically
  */
+ 
 class PHML {
+	
     /**
      * Generate HTML element
      *
@@ -42,13 +44,13 @@ class PHML {
         return $html;
     }
 
-    /**
-     * Magic method to handle dynamic method calls
-     *
-     * @param string $name The name of the method called
-     * @param array $arguments The arguments passed to the method
-     * @return string|null The generated HTML element or null if no arguments provided
-     */
+	/**
+	 * Magic method to handle dynamic method calls.
+	 *
+	 * @param string $name The name of the method called.
+	 * @param array $arguments The arguments passed to the method.
+	 * @return string|null The generated HTML element or null if no arguments provided.
+	 */
     public static function __callStatic($name, $arguments) {
         if (!empty($arguments)) {
             $tag = $name;
@@ -91,54 +93,119 @@ class PHML {
         }
     }
 
+	/**
+	 * Parse a single HTML element from an indexed array.
+	 *
+	 * @param array $element The indexed array representing the HTML element.
+	 * @return string The generated HTML element or an empty string if the element is invalid.
+	 */
+	private static function parseElement($element) {
+		if (!is_array($element)) {
+			return ''; // Invalid element
+		}
+
+		// Separate tag, attributes, inner content, and 'end' key
+		$tag = key($element);
+		$content = current($element);
+		$attributes = [];
+		$children = '';
+		$end = true; // Default end value
+
+		if (is_array($content)) {
+			if (isset($content['inner'])) {
+				$innerContent = $content['inner'];
+				// If inner content is an array, recursively render it
+				if (is_array($innerContent)) {
+					$children .= self::arml($innerContent);
+				} else {
+					// If inner content is a string, set it as inner HTML
+					$children .= $innerContent;
+				}
+				unset($content['inner']);
+			}
+			// Set 'end' key value
+			if (isset($content['end'])) {
+				$end = (bool)$content['end'];
+				unset($content['end']);
+			}
+			// Set remaining array elements as attributes
+			$attributes = $content;
+		} else {
+			// If content is not an array, treat it as inner HTML
+			$children = $content;
+		}
+
+		// Generate HTML for the element
+		return self::element($tag, $attributes, $children, $end);
+	}
+
+	/**
+	 * Parse a single HTML element from an associative array.
+	 *
+	 * @param string $tag The HTML tag name.
+	 * @param mixed $content The content of the HTML element.
+	 *                      Can be either an associative array or a string.
+	 * @return string The generated HTML element.
+	 */
+	private static function parseNestedElement($tag, $content) {
+		$attributes = [];
+		$children = '';
+		$end = true; // Default end value
+
+		// Separate attributes, inner content, and 'end' key
+		if (is_array($content)) {
+			if (isset($content['inner'])) {
+				$innerContent = $content['inner'];
+				// If inner content is an array, recursively render it
+				if (is_array($innerContent)) {
+					$children .= self::arml($innerContent);
+				} else {
+					// If inner content is a string, set it as inner HTML
+					$children .= $innerContent;
+				}
+				unset($content['inner']);
+			}
+			// Set 'end' key value
+			if (isset($content['end'])) {
+				$end = (bool)$content['end'];
+				unset($content['end']);
+			}
+			// Set remaining array elements as attributes
+			$attributes = $content;
+		} else {
+			// If content is not an array, treat it as inner HTML
+			$children = $content;
+		}
+
+		// Generate HTML for the element
+		return self::element($tag, $attributes, $children, $end);
+	}
+
     /**
      * Render an array of HTML elements
      *
      * @param array $elements An associative array representing HTML elements and their attributes
      * @return string The generated HTML string
      */
-    public static function arml($elements) {
-        if (!is_array($elements)) {
-            return '';
-        }
+	public static function arml($elements) {
+		if (!is_array($elements)) {
+			return '';
+		}
 
-        $html = '';
-        foreach ($elements as $element) {
-            if (!is_array($element)) {
-                continue;
-            }
+		$html = '';
+		foreach ($elements as $key => $content) {
+			// Check if the key is numeric, indicating an indexed array
+			if (is_numeric($key)) {
+				// Treat the content as a single HTML element
+				$html .= self::parseElement($content);
+			} else {
+				// Treat the content as an associative array representing nested HTML elements
+				$html .= self::parseNestedElement($key, $content);
+			}
+		}
 
-            // Separate tag, attributes, inner content, and 'end' key
-            $tag = key($element);
-            $content = current($element);
-            $attributes = [];
-            $children = '';
-            $end = true; // Default end value
-
-            if (isset($content['inner'])) {
-                $innerContent = $content['inner'];
-                // If inner content is an array, recursively render it
-                if (is_array($innerContent)) {
-                    $children .= self::arml($innerContent);
-                } else {
-                    // If inner content is a string, set it as inner HTML
-                    $children .= $innerContent;
-                }
-                unset($content['inner']);
-            }
-            // Set 'end' key value
-            if (isset($content['end'])) {
-                $end = (bool)$content['end'];
-                unset($content['end']);
-            }
-            // Set remaining array elements as attributes
-            $attributes = $content;
-
-            // Generate HTML for the element
-            $html .= self::element($tag, $attributes, $children, $end);
-        }
-        return $html;
-    }
+		return $html;
+	}
 
     /**
      * Render HTML elements from JSON data
