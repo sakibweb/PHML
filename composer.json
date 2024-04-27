@@ -1,0 +1,22 @@
+{
+    "name": "sakibweb/phml",
+    "description": "Render HTML elements using PHP with PHML",
+    "type": "library",
+    "keywords": ["html", "php", "rendering"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Sakibur Rahman",
+            "email": "sakib.sr20@gmail.com",
+            "homepage": "https://github.com/sakibweb"
+        }
+    ],
+    "require": {
+        "php": "^7.0.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "PHML\\": "src/"
+        }
+    }
+}
