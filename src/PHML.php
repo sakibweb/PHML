@@ -218,5 +218,178 @@ class PHML {
 
         return self::arml($data);
     }
+
+	/**
+	 * Convert HTML to JSON or array format.
+	 *
+	 * @param string $source The HTML source (URL, file, or string).
+	 * @param bool $link Whether to load HTML as a link (default is false).
+	 * @param string $output The desired output format ('json' or 'array', default is 'array').
+	 * @return mixed The converted HTML in the specified format.
+	 */
+	public static function html($source, $link = false, $output = 'array') {
+		$html = '';
+
+		// Load HTML from different sources
+		if ($link) {
+			// Load HTML from URL
+			$html = file_get_contents($source);
+            // Fix resource links for CSS, JS, images, etc.
+            $html = self::fixResourceLinks($html, $source);
+		} else {
+			// Load HTML from file or string
+			if (file_exists($source)) {
+				$html = file_get_contents($source);
+			} else {
+				$html = $source;
+			}
+		}
+
+		// Parse HTML to array
+		$dom = new DOMDocument();
+		@$dom->loadHTML($html); // Suppress errors
+		$elements = self::parseDOMElement($dom->documentElement);
+
+		// Return the converted HTML in the specified format
+		if ($output === 'json') {
+			return json_encode($elements);
+		} else {
+			return $elements;
+		}
+	}
+
+	/**
+	 * Recursively parse DOMElement to array format.
+	 *
+	 * @param DOMElement $element The DOMElement to parse.
+	 * @return array The parsed array structure.
+	 */
+    private static function parseDOMElement($element) {
+        $result = [];
+
+        $attributes = [];
+        foreach ($element->attributes as $attr) {
+            $attributes[$attr->name] = $attr->value;
+        }
+
+        $children = [];
+        foreach ($element->childNodes as $child) {
+            if ($child instanceof DOMElement) {
+                $children[] = self::parseDOMElement($child);
+            } elseif ($child instanceof DOMText && trim($child->nodeValue) !== '') {
+                $children[] = trim($child->nodeValue);
+            }
+        }
+
+        $tag = $element->tagName;
+        if (!empty($attributes) || !empty($children)) {
+            $result[$tag] = $attributes;
+            if (!empty($children)) {
+                if (count($children) === 1 && is_string($children[0])) {
+                    $result[$tag]['inner'] = $children[0];
+                } else {
+                    $result[$tag]['inner'] = $children;
+                }
+            }
+        } else {
+            $result = $tag;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Fix resource links (CSS, JS, images, etc.) in HTML content.
+     *
+     * @param string $html The HTML content.
+     * @param string $base_url The base URL to resolve relative paths.
+     * @return string The HTML content with fixed resource links.
+     */
+    private static function fixResourceLinks($html, $base_url) {
+        // Extract the base URL parts
+        $base_url_parts = parse_url($base_url);
+        $base_url = $base_url_parts['scheme'] . '://' . $base_url_parts['host'];
+
+        // Define patterns to match different types of resource links
+        $patterns = [
+            '/(<link[^>]+href=["\'])([^"\']+)(["\'][^>]*>)/i',
+            '/(<script[^>]+src=["\'])([^"\']+)(["\'][^>]*>)/i',
+            '/(<img[^>]+src=["\'])([^"\']+)(["\'][^>]*>)/i',
+            '/(<a[^>]+href=["\'])([^"\']+)(["\'][^>]*>)/i',
+        ];
+
+        // Replace each matched resource link with the fixed link
+        $html = preg_replace_callback($patterns, function($matches) use ($base_url) {
+            $url = $matches[2];
+            // Check if the URL is relative and prepend the base URL if needed
+            if (strpos($url, 'http') !== 0) {
+                $url = $base_url . '/' . ltrim($url, '/');
+            }
+            return $matches[1] . $url . $matches[3];
+        }, $html);
+
+        return $html;
+    }
+
+    /**
+     * Render HTML elements from a link.
+     *
+     * @param string $url The URL of the HTML content.
+     * @param bool $output_json Whether to output JSON format (default: false).
+     * @return mixed The HTML content as an array or JSON string.
+     */
+    public static function htmlFromLink($url, $output_json = false) {
+        // Load HTML content from the URL
+        $html = file_get_contents($url);
+        // Fix resource links in the HTML content
+        $html = self::fixResourceLinks($html, $url);
+        // Parse the HTML content to array format
+        $elements = self::html($html, false, 'array');
+        // Return the HTML content in the desired format
+        return $output_json ? json_encode($elements) : $elements;
+    }
+
+    /**
+     * Convert a PHP array to a PHP code representation.
+     *
+     * @param array $array The input array to convert.
+     * @param int $indent_level The current indentation level (default is 0).
+     * @return string The PHP code representation of the array.
+     */
+    public static function php($array, $indent_level = 0) {
+        $php_code = '';
+        $indent = str_repeat('    ', $indent_level);
+        $php_code .= "array(\n";
+
+        foreach ($array as $key => $value) {
+            $php_code .= $indent . '    ';
+            if (is_string($key)) {
+                $php_code .= "'" . addslashes($key) . "' => ";
+            }
+
+            if (is_array($value)) {
+                $php_code .= self::php($value, $indent_level + 1);
+            } else {
+                if (is_string($value)) {
+                    $php_code .= "'" . addslashes($value) . "'";
+                } elseif (is_bool($value)) {
+                    $php_code .= $value ? 'true' : 'false';
+                } elseif (is_null($value)) {
+                    $php_code .= 'null';
+                } else {
+                    $php_code .= $value;
+                }
+            }
+            $php_code .= ",\n";
+        }
+
+        $php_code .= $indent . ")";
+        if ($indent_level == 0) {
+            $php_code .= ";\n";
+            $php_code .= "?>";
+        }
+
+        return $php_code;
+    }
 }
 ?>
